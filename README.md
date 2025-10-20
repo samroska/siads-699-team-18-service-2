@@ -38,3 +38,11 @@ The architecture of this project is a backend REST API service built with Python
 
 5. curl the service
     - `curl -X POST -F "file=@path/to/your/file.jpg" http://localhost:8000/doctors`
+
+6. stop the service
+    - ` control + c`
+
+7. change the CORS allow origins back to capstoneteam18.netlify.app before comitting any files
+    - `allow_origins=["https://capstoneteam18.netlify.com"]`
+
+Note: this service runs on posrt 8000. Unlike siads-699-team-18-service which runs on port 8080.
