@@ -29,9 +29,9 @@ image_converter = ImageConverter()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://capstoneteam18.netlify.app"],
+    allow_origins=["https://capstoneteam18.netlify.app", "https://capstoneteam18.netlify.com"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -172,6 +172,18 @@ async def predict_image(file: UploadFile = File(..., description="PNG, JPG, JPEG
     Process image using the default ML model.
     """
     return await process_image_with_model(file, '/predict')
+
+@app.options("/doctor")
+async def options_doctor():
+    """Handle CORS preflight requests for /doctor endpoint."""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "https://capstoneteam18.netlify.app",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 @app.post("/doctor")
 async def predict_image_user(file: UploadFile = File(..., description="PNG, JPG, JPEG, HEIC, HEIF, or MPO image file for user model prediction")):
