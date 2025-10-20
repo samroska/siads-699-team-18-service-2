@@ -38,25 +38,18 @@ class ImageConverter:
             return f"{base_formats}, HEIC/HEIF (iPhone photos)"
         return base_formats
     
-    def convert_mpo_to_png(self, img: Image.Image) -> Image.Image:
-   
+    def convert_mpo_to_jpeg(self, img: Image.Image) -> Image.Image:
         try:
- 
             if hasattr(img, 'n_frames') and img.n_frames > 1:
-                # MPO files can have multiple frames, get the first one
-                img.seek(0)  # Go to first frame
-                logger.info(f"MPO file detected with {img.n_frames} frames, using first frame")            
- 
+                img.seek(0)
+                logger.info(f"MPO file detected with {img.n_frames} frames, using first frame")
             img = self._ensure_rgb_mode(img)
-            
-            png_buffer = io.BytesIO()
-            img.save(png_buffer, format='PNG')
-            png_buffer.seek(0)
- 
-            return Image.open(png_buffer)
-            
+            jpeg_buffer = io.BytesIO()
+            img.save(jpeg_buffer, format='JPEG')
+            jpeg_buffer.seek(0)
+            return Image.open(jpeg_buffer)
         except Exception as e:
-            logger.error(f"Error converting MPO to PNG: {e}")
+            logger.error(f"Error converting MPO to JPEG: {e}")
             raise
     
     def _ensure_rgb_mode(self, img: Image.Image) -> Image.Image:
@@ -78,70 +71,48 @@ class ImageConverter:
             
         return img.convert('RGB')
     
-    def convert_to_png(self, img: Image.Image, original_format: str) -> Tuple[Image.Image, bool]:
+    def convert_to_jpeg(self, img: Image.Image, original_format: str) -> Tuple[Image.Image, bool]:
         """
-        Convert any image format to PNG format.
-        Always converts to PNG to ensure consistent processing.
-        
+        Convert any image format to JPEG format.
+        Always converts to JPEG to ensure consistent processing.
         Args:
             img: PIL Image object
             original_format: Original format of the image
-            
         Returns:
-            Tuple of (converted PNG image, was_converted boolean)
+            Tuple of (converted JPEG image, was_converted boolean)
         """
-        logger.info(f"Converting {original_format} to PNG for consistent processing")
-        
+        logger.info(f"Converting {original_format} to JPEG for consistent processing")
         try:
             if img.format == 'MPO':
-                converted_img = self.convert_mpo_to_png(img)
+                converted_img = self.convert_mpo_to_jpeg(img)
             else:
-                # Handle all formats (PNG, JPEG, HEIC, etc.) - convert everything to PNG
                 rgb_img = self._ensure_rgb_mode(img)
-                
-                # Convert to PNG in memory
-                png_buffer = io.BytesIO()
-                rgb_img.save(png_buffer, format='PNG')
-                png_buffer.seek(0)
-                converted_img = Image.open(png_buffer)
-            
-            # Track if conversion was needed (original format != PNG)
-            was_converted = original_format != 'PNG'
-            logger.info(f"Successfully processed {original_format} to PNG (conversion needed: {was_converted})")
+                jpeg_buffer = io.BytesIO()
+                rgb_img.save(jpeg_buffer, format='JPEG')
+                jpeg_buffer.seek(0)
+                converted_img = Image.open(jpeg_buffer)
+            was_converted = original_format != 'JPEG'
+            logger.info(f"Successfully processed {original_format} to JPEG (conversion needed: {was_converted})")
             return converted_img, was_converted
-            
         except Exception as e:
-            logger.error(f"Error converting {original_format} to PNG: {e}")
+            logger.error(f"Error converting {original_format} to JPEG: {e}")
             raise
     
     def process_image(self, file_content: bytes) -> Tuple[Image.Image, str, bool]:
- 
         try:
-            # Open and verify image
             img = Image.open(io.BytesIO(file_content))
-            img.verify()  # Verify the image is valid
-            
-            # Re-open after verify (verify can close the image)
+            img.verify()
             img = Image.open(io.BytesIO(file_content))
             original_format = img.format
-            
             logger.info(f"Detected image format: {original_format}")
-            
-            # Validate format is supported
             if not self.validate_format(img):
                 error_message = f"Unsupported image format: {original_format}. Supported formats: {self.get_supported_formats_message()}"
                 logger.error(error_message)
                 raise ValueError(error_message)
-            
-            # Convert to PNG if needed
-            processed_img, was_converted = self.convert_to_png(img, original_format)
-            
-            logger.info(f"Image processed successfully: format={original_format}, final_format=PNG, size={processed_img.size}, mode={processed_img.mode}")
-            
+            processed_img, was_converted = self.convert_to_jpeg(img, original_format)
+            logger.info(f"Image processed successfully: format={original_format}, final_format=JPEG, size={processed_img.size}, mode={processed_img.mode}")
             return processed_img, original_format, was_converted
-            
         except ValueError:
-            # Re-raise validation errors as-is
             raise
         except Exception as e:
             logger.error(f"Error processing image: {e}")
@@ -150,11 +121,11 @@ class ImageConverter:
     def get_image_info(self, img: Image.Image, original_format: str, file_size: int, was_converted: bool) -> dict:
         """
         Get comprehensive information about the processed image.
-        All images are now processed to PNG format for consistency.
+        All images are now processed to JPEG format for consistency.
         """
         return {
             "original_format": original_format,
-            "processed_format": "PNG",  # Always PNG now
+            "processed_format": "JPEG",  # Always JPEG now
             "size": img.size,
             "mode": img.mode,
             "file_size_bytes": file_size,
@@ -164,5 +135,5 @@ class ImageConverter:
                 "HEIC": "iPhone HEIC", 
                 "HEIF": "iPhone HEIF"
             }.get(original_format, original_format),
-            "processing_note": "All images are standardized to PNG format for consistent ML processing"
+            "processing_note": "All images are standardized to JPEG format for consistent ML processing"
         }
