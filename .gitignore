@@ -208,4 +208,4 @@ __marimo__/
 
 # Kera Model
 *.keras
-
+.last_install
