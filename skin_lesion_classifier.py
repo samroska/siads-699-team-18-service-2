@@ -18,10 +18,30 @@ _models_loaded: Dict[str, bool] = {}
 _temp_dirs: Dict[str, Optional[str]] = {}
 
 class SkinLesionClassifier:
+    @staticmethod
+    def _extract_model_if_zipped(model_path: str, model_name: str = 'default') -> str:
+        """
+        If the model_path is a zip file, extract and return the .keras file path.
+        Otherwise, return the model_path as-is.
+        """
+        if model_path.endswith('.zip'):
+            global _temp_dirs
+            if model_name not in _temp_dirs or not _temp_dirs[model_name]:
+                _temp_dirs[model_name] = tempfile.mkdtemp(suffix='_model')
+            with zipfile.ZipFile(model_path, 'r') as zip_ref:
+                zip_ref.extractall(_temp_dirs[model_name])
+            for root, dirs, files in os.walk(_temp_dirs[model_name]):
+                for file in files:
+                    if file.endswith('.keras'):
+                        return os.path.join(root, file)
+            raise FileNotFoundError(f"No .keras model file found in the zip archive for {model_name}")
+        else:
+            return model_path
 
     CLASS_NAMES = ['ACK', 'BCC', 'MEL', 'NEV', 'SCC', 'SEK']
-    INPUT_SIZE = (64, 64)
+    INPUT_SIZE = (224, 224)
     DEFAULT_MODEL_ZIP = 'BCN20000.keras.zip'
+    MODEL_CONFIGS = {}  # Add this line to avoid attribute errors. Populate as needed.
     
     @staticmethod
     def _extract_model_from_zip(zip_path: str) -> str:
@@ -71,6 +91,8 @@ class SkinLesionClassifier:
         
         if model_name in SkinLesionClassifier.MODEL_CONFIGS:
             model_path = SkinLesionClassifier.MODEL_CONFIGS[model_name]
+        elif model_name == 'default':
+            model_path = SkinLesionClassifier.DEFAULT_MODEL_ZIP
         else:
             model_path = model_name
         
@@ -90,37 +112,41 @@ class SkinLesionClassifier:
             raise
     
     @staticmethod
-    def _cleanup_temp_files():
+    def _cleanup_temp_files(model_name: Optional[str] = None):
         global _temp_dirs
-        for temp_dir in _temp_dirs.values():
+        if model_name is not None:
+            temp_dir = _temp_dirs.get(model_name)
             if temp_dir and os.path.exists(temp_dir):
                 try:
                     shutil.rmtree(temp_dir)
-                    logger.info(f"Cleaned up temporary directory: {temp_dir}")
+                    logger.info(f"Cleaned up temporary directory for {model_name}: {temp_dir}")
                 except Exception as e:
-                    logger.warning(f"Could not clean up temporary directory: {e}")
-        _temp_dirs.clear()
+                    logger.warning(f"Could not clean up temporary directory for {model_name}: {e}")
+            _temp_dirs.pop(model_name, None)
+        else:
+            for temp_dir in _temp_dirs.values():
+                if temp_dir and os.path.exists(temp_dir):
+                    try:
+                        shutil.rmtree(temp_dir)
+                        logger.info(f"Cleaned up temporary directory: {temp_dir}")
+                    except Exception as e:
+                        logger.warning(f"Could not clean up temporary directory: {e}")
+            _temp_dirs.clear()
     
     @staticmethod
     def preprocess_image(image: Union[Image.Image, str]) -> np.ndarray:
- 
         try:
- 
             if isinstance(image, str):
                 image_rgb = Image.open(image).convert('RGB')
             elif isinstance(image, Image.Image):
                 image_rgb = image.convert('RGB')
             else:
                 raise ValueError("Image must be a PIL Image object or file path")
-            
             image_array = img_to_array(image_rgb)
             resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
- 
-            processed_array = img_to_array(resized_image).reshape(1, 64, 64, 3)
+            processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
             processed_array = processed_array / 255.0
-            
             return processed_array
-            
         except Exception as e:
             logger.error(f"Error preprocessing image: {e}")
             raise
