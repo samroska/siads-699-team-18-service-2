@@ -29,7 +29,7 @@ image_converter = ImageConverter()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://capstoneteam18.netlify.app", "https://capstoneteam18.netlify.com"],
+    allow_origins=["https://capstoneteam18.netlify.app", "https://capstoneteam18.netlify.com","https://team-18-test.netlify.app"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
