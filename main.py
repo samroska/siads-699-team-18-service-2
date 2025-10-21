@@ -35,6 +35,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["http://localhost:5173"],
+#     allow_credentials=True,
+#     allow_methods=["GET", "POST", "OPTIONS"],
+#     allow_headers=["*"],
+# )
+
 @app.get("/")
 async def root():
     return {"message": "ML Image Prediction API is running!"}
@@ -96,6 +104,7 @@ async def process_image_with_model(file: UploadFile, endpoint_name: str):
         try:
             logger.info(f"Starting ML model inference...")
             predictions = SkinLesionClassifier.predict(img)
+            logger.info(f"Model predictions: {predictions}")
             if not isinstance(predictions, dict):
                 logger.error(f"Invalid predictions format: {type(predictions)}")
                 return JSONResponse(
@@ -190,4 +199,4 @@ async def predict_image_user(file: UploadFile = File(..., description="PNG, JPG,
     """
     Process image using the default ML model (user endpoint).
     """
-    return await process_image_with_model(file, '/doctor')
+    return await process_image_with_model(file, 'doctor')

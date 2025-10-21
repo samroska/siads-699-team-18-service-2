@@ -38,7 +38,7 @@ class SkinLesionClassifier:
         else:
             return model_path
 
-    CLASS_NAMES = ['ACK', 'BCC', 'MEL', 'NEV', 'SCC', 'SEK']
+    CLASS_NAMES = ['nevus',"melanoma","other","squamous cell carcinoma","solar lentigo","basal cell carcinoma", "melanoma metastasis" , "seborrheic keratosis", "actinic keratosis","dermatofibroma", "scar", "vascular lesion"]
     INPUT_SIZE = (224, 224)
     DEFAULT_MODEL_ZIP = 'BCN20000.keras.zip'
     MODEL_CONFIGS = {}  # Add this line to avoid attribute errors. Populate as needed.
