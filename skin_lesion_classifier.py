@@ -154,7 +154,7 @@ class SkinLesionClassifier:
     @staticmethod
     def predict(image: Union[Image.Image, str]) -> Dict[str, float]:
         """
-        Make prediction using the default model.
+        Make prediction using the default model. Returns results sorted from largest to smallest.
         """
         try:
             SkinLesionClassifier._ensure_model_loaded()
@@ -165,8 +165,10 @@ class SkinLesionClassifier:
             results = {}
             for i, class_name in enumerate(SkinLesionClassifier.CLASS_NAMES):
                 results[class_name] = float(round(prediction[0][i], 3))
-            logger.info(f"Prediction completed: {results}")
-            return results
+            # Sort results from largest to smallest
+            sorted_results = dict(sorted(results.items(), key=lambda item: item[1], reverse=True))
+            logger.info(f"Prediction completed: {sorted_results}")
+            return sorted_results
         except Exception as e:
             logger.error(f"Error making prediction: {e}")
             raise
