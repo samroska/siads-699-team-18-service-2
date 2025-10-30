@@ -19,6 +19,12 @@ _temp_dirs: Dict[str, Optional[str]] = {}
 
 class SkinLesionClassifier:
     @staticmethod
+    def capitalize_class_name(class_name: str) -> str:
+        """
+        Capitalize each word in the class name string.
+        """
+        return ' '.join(word.capitalize() for word in class_name.split())
+    @staticmethod
     def _extract_model_if_zipped(model_path: str, model_name: str = 'default') -> str:
         """
         If the model_path is a zip file, extract and return the .keras file path.
@@ -164,10 +170,9 @@ class SkinLesionClassifier:
             prediction = _models['default'].predict(processed_image, verbose=0)
             results = {}
             for i, class_name in enumerate(SkinLesionClassifier.CLASS_NAMES):
-                results[class_name] = float(round(prediction[0][i], 3))
+                results[SkinLesionClassifier.capitalize_class_name(class_name)] = float(round(prediction[0][i], 3))
             # Sort results from largest to smallest
             sorted_results = dict(sorted(results.items(), key=lambda item: item[1], reverse=True))
-            logger.info(f"Prediction completed: {sorted_results}")
             return sorted_results
         except Exception as e:
             logger.error(f"Error making prediction: {e}")
