@@ -151,7 +151,7 @@ class SkinLesionClassifier:
             image_array = img_to_array(image_rgb)
             resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
             processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
-            processed_array = processed_array / 255.0
+            # processed_array = processed_array / 255.0
             return processed_array
         except Exception as e:
             logger.error(f"Error preprocessing image: {e}")
