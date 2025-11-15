@@ -3,6 +3,7 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from PIL import Image
 import numpy as np
 import logging
+import time
 from typing import Dict, Union, Optional
 import os
 import zipfile
@@ -92,7 +93,6 @@ class SkinLesionClassifier:
     def _ensure_model_loaded(model_name: str = 'default'):
         """Ensure the specified model is loaded."""
         global _models, _models_loaded
-        
         if model_name in _models_loaded and _models_loaded[model_name] and _models.get(model_name) is not None:
             return
         
@@ -104,15 +104,24 @@ class SkinLesionClassifier:
             model_path = model_name
         
         try:
+            # Time extraction and load separately to help diagnose slow steps
+            t0 = time.monotonic()
             actual_model_path = SkinLesionClassifier._extract_model_if_zipped(model_path, model_name)
-            
+            t1 = time.monotonic()
+
             if not os.path.exists(actual_model_path):
                 raise FileNotFoundError(f"Model file not found for {model_name}: {actual_model_path}")
-            
+
+            logger.info(f"Starting to load model '{model_name}' from {actual_model_path}")
+            load_start = time.monotonic()
             _models[model_name] = tf.keras.models.load_model(actual_model_path)
+            load_end = time.monotonic()
+
             _models_loaded[model_name] = True
-            logger.info(f"Model '{model_name}' loaded successfully from {actual_model_path}")
-            
+            logger.info(
+                f"Model '{model_name}' loaded successfully from {actual_model_path} (extraction_time={(t1-t0):.2f}s, load_time={(load_end-load_start):.2f}s)"
+            )
+
         except Exception as e:
             logger.error(f"Error loading {model_name} model: {e}")
             SkinLesionClassifier._cleanup_temp_files(model_name)
@@ -164,11 +173,23 @@ class SkinLesionClassifier:
         Make prediction using the default model. Returns results sorted from largest to smallest.
         """
         try:
+            # Ensure the model is loaded (may be scheduled at startup via warmup)
+            t_start = time.monotonic()
             SkinLesionClassifier._ensure_model_loaded()
+            t_after_load = time.monotonic()
             if 'default' not in _models or _models['default'] is None:
                 raise RuntimeError("Model failed to load.")
+            preprocess_start = time.monotonic()
             processed_image = SkinLesionClassifier.preprocess_image(image)
+            preprocess_end = time.monotonic()
+
+            infer_start = time.monotonic()
             prediction = _models['default'].predict(processed_image, verbose=0)
+            infer_end = time.monotonic()
+
+            logger.info(
+                f"Timing (total={(time.monotonic()-t_start):.2f}s}, load_wait={(t_after_load-t_start):.2f}s, preprocess={(preprocess_end-preprocess_start):.2f}s, inference={(infer_end-infer_start):.2f}s)"
+            )
             results = {}
             for i, class_name in enumerate(SkinLesionClassifier.CLASS_NAMES):
                 results[SkinLesionClassifier.capitalize_class_name(class_name)] = float(round(prediction[0][i], 3))
