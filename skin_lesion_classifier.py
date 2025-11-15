@@ -188,7 +188,7 @@ class SkinLesionClassifier:
             infer_end = time.monotonic()
 
             logger.info(
-                f"Timing (total={(time.monotonic()-t_start):.2f}s}, load_wait={(t_after_load-t_start):.2f}s, preprocess={(preprocess_end-preprocess_start):.2f}s, inference={(infer_end-infer_start):.2f}s)"
+                f"Timing (total={(time.monotonic()-t_start):.2f}s, load_wait={(t_after_load-t_start):.2f}s, preprocess={(preprocess_end-preprocess_start):.2f}s, inference={(infer_end-infer_start):.2f}s)"
             )
             results = {}
             for i, class_name in enumerate(SkinLesionClassifier.CLASS_NAMES):
