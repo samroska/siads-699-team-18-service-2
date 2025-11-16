@@ -58,7 +58,8 @@ class SkinLesionClassifier:
     # CLASS_NAMES = ['nevus',"melanoma","other","squamous cell carcinoma","solar lentigo","basal cell carcinoma", "melanoma metastasis" , "seborrheic keratosis", "actinic keratosis","dermatofibroma", "scar", "vascular lesion"]
     CLASS_NAMES = ['actinic keratosis', 'basal cell carcinoma', ' Benign Keratosis', 'dermatofibroma', 'melanoma', 'nevus', 'squamous cell carcinoma', 'VASC']
     INPUT_SIZE = (224, 224)
-    DEFAULT_MODEL_ZIP = 'BCN20000.keras.zip'
+    # Default model file (expect unzipped .keras file to be present at startup)
+    DEFAULT_MODEL_FILE = 'BCN20000.keras'
     MODEL_CONFIGS = {}  # Add this line to avoid attribute errors. Populate as needed.
     
     @staticmethod
@@ -88,11 +89,11 @@ class SkinLesionClassifier:
     def _ensure_model_loaded():
         """Ensure the model is loaded from BCN20000.keras.zip."""
         global _models, _models_loaded
+        # Legacy convenience loader: expect a .keras model file to be present (not a zip)
         if 'default' in _models_loaded and _models_loaded['default'] and _models.get('default') is not None:
             return
-        zip_path = SkinLesionClassifier.DEFAULT_MODEL_ZIP
+        model_path = SkinLesionClassifier.DEFAULT_MODEL_FILE
         try:
-            model_path = SkinLesionClassifier._extract_model_from_zip(zip_path)
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model file not found: {model_path}")
             _models['default'] = tf.keras.models.load_model(model_path)
@@ -113,7 +114,8 @@ class SkinLesionClassifier:
         if model_name in SkinLesionClassifier.MODEL_CONFIGS:
             model_path = SkinLesionClassifier.MODEL_CONFIGS[model_name]
         elif model_name == 'default':
-            model_path = SkinLesionClassifier.DEFAULT_MODEL_ZIP
+            # Use the unzipped default .keras model file by default
+            model_path = SkinLesionClassifier.DEFAULT_MODEL_FILE
         else:
             model_path = model_name
         
