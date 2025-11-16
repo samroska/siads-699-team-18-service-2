@@ -9,6 +9,7 @@ import logging
 import skin_lesion_classifier as Processor
 from skin_lesion_classifier import SkinLesionClassifier
 from image_converter import ImageConverter
+import asyncio
 
 # Add TensorFlow logging control at the top
 import os
@@ -37,7 +38,7 @@ app.add_middleware(
 
 # app.add_middleware(
 #     CORSMiddleware,
-#     allow_origins=["http://localhost:5174"],
+#     allow_origins=["http://localhost:5173"],
 #     allow_credentials=True,
 #     allow_methods=["GET", "POST", "OPTIONS"],
 #     allow_headers=["*"],
@@ -50,6 +51,31 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "ml-image-api"}
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Schedule a background task to warm up/load the ML model so the first request isn't delayed by model load.
+    This runs non-blocking so the app can start even if model load is slow.
+    """
+    try:
+        logger.info("Scheduling background model warmup...")
+        # Run the blocking load operation in a background thread so it doesn't block the event loop.
+        asyncio.create_task(asyncio.to_thread(SkinLesionClassifier._ensure_model_loaded))
+        logger.info("Background warmup task scheduled.")
+    except Exception as e:
+        logger.error(f"Failed to schedule background model warmup: {e}")
+
+
+@app.post("/warmup")
+async def warmup_model():
+    """Trigger a background model warmup/load. Returns 202 accepted immediately."""
+    try:
+        asyncio.create_task(asyncio.to_thread(SkinLesionClassifier._ensure_model_loaded))
+        return JSONResponse(status_code=202, content={"message": "Model warmup scheduled"}, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logger.error(f"Warmup scheduling failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)}, headers={"Access-Control-Allow-Origin": "*"})
 
 async def process_image_with_model(file: UploadFile, endpoint_name: str):
     """
@@ -180,7 +206,7 @@ async def predict_image(file: UploadFile = File(..., description="PNG, JPG, JPEG
     """
     Process image using the default ML model.
     """
-    return await process_image_with_model(file, '/predict')
+    return await process_image_with_model(file, 'predict')
 
 @app.options("/doctor")
 async def options_doctor():
