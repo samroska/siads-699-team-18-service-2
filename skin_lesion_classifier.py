@@ -32,16 +32,26 @@ class SkinLesionClassifier:
         Otherwise, return the model_path as-is.
         """
         if model_path.endswith('.zip'):
+            # Extract only the .keras file from the zip (streamed) to avoid using large extra disk space
             global _temp_dirs
             if model_name not in _temp_dirs or not _temp_dirs[model_name]:
                 _temp_dirs[model_name] = tempfile.mkdtemp(suffix='_model')
+            temp_dir = _temp_dirs[model_name]
             with zipfile.ZipFile(model_path, 'r') as zip_ref:
-                zip_ref.extractall(_temp_dirs[model_name])
-            for root, dirs, files in os.walk(_temp_dirs[model_name]):
-                for file in files:
-                    if file.endswith('.keras'):
-                        return os.path.join(root, file)
-            raise FileNotFoundError(f"No .keras model file found in the zip archive for {model_name}")
+                # Find the first .keras entry in the archive
+                keras_member = None
+                for info in zip_ref.infolist():
+                    if info.filename.endswith('.keras'):
+                        keras_member = info.filename
+                        break
+                if not keras_member:
+                    raise FileNotFoundError(f"No .keras model file found in the zip archive for {model_name}")
+                target_path = os.path.join(temp_dir, os.path.basename(keras_member))
+                # Stream the file out to disk to avoid creating extra copies in memory
+                with zip_ref.open(keras_member) as src, open(target_path, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                logger.info(f"Extracted model file to: {target_path}")
+                return target_path
         else:
             return model_path
 
@@ -57,19 +67,23 @@ class SkinLesionClassifier:
         global _temp_dirs
         if not os.path.exists(zip_path):
             raise FileNotFoundError(f"Model zip file not found: {zip_path}")
-
         if 'default' not in _temp_dirs or not _temp_dirs['default']:
             _temp_dirs['default'] = tempfile.mkdtemp(suffix='_model')
+        temp_dir = _temp_dirs['default']
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(_temp_dirs['default'])
-
-        for root, dirs, files in os.walk(_temp_dirs['default']):
-            for file in files:
-                if file.endswith('.keras'):
-                    model_path = os.path.join(root, file)
-                    logger.info(f"Found model file: {model_path}")
-                    return model_path
-        raise FileNotFoundError("No .keras model file found in the zip archive")
+            # Find the first .keras file and stream-extract it to temp_dir
+            keras_member = None
+            for info in zip_ref.infolist():
+                if info.filename.endswith('.keras'):
+                    keras_member = info.filename
+                    break
+            if not keras_member:
+                raise FileNotFoundError("No .keras model file found in the zip archive")
+            model_path = os.path.join(temp_dir, os.path.basename(keras_member))
+            with zip_ref.open(keras_member) as src, open(model_path, 'wb') as dst:
+                shutil.copyfileobj(src, dst)
+            logger.info(f"Found and extracted model file: {model_path}")
+            return model_path
     @staticmethod
     def _ensure_model_loaded():
         """Ensure the model is loaded from BCN20000.keras.zip."""
