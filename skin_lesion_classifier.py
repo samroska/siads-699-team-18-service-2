@@ -85,6 +85,7 @@ class SkinLesionClassifier:
                 shutil.copyfileobj(src, dst)
             logger.info(f"Found and extracted model file: {model_path}")
             return model_path
+    
     @staticmethod
     def _ensure_model_loaded():
         """Ensure the model is loaded from BCN20000.keras.zip."""
