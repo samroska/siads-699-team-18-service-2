@@ -6,6 +6,9 @@ Team members:
 - Sawsan Allam
 - Andre Luis Camarosano Onofre
 
+## Discliamer
+
+This application is not intended to replace professional medical advice, diagnosis, or treatment. Always seek the guidance of your physician or other qualified health care provider with any questions you may have regarding a medical condition.
 
 ## About the project
 Skin cancer is a growing global health concern, with rising incidence rates and limited access to early diagnostic services in many regions- for example melanoma accounts for around 75% of skin cancer-related deaths (Didier et al., 2024). Timely detection is essential, as early-stage skin cancers are highly treatable, decreasing healthcare costs and improving health outcomes. Traditional diagnostic methods rely on specialist expertise and dermatoscopic imaging, which are often scarce in low-resource or remote settings. Advances in deep learning offer promising solutions by enabling automated classification of skin lesions from image data, potentially bridging these gaps. 
@@ -20,6 +23,13 @@ The BCN20000 dataset consists of dermoscopic images of skin lesions taken betwee
 ## Project Architecture
 
 The architecture of this project is a backend REST API service built with Python, designed to serve a machine learning model for skin lesion classification. The service exposes endpoints (such as /doctors) that accept image files via HTTP requests, process them using the BCN20000 model, and return predictions. It is intended to be consumed by a frontend application, enabling users to upload images and receive diagnostic results. The backend handles model loading, inference, and communication with the frontend.
+
+
+Repos used to make this application:
+
+* UI: https://github.com/samroska/siads-699-team-18-frontend
+* User Service: https://github.com/samroska/siads-699-team-18-service
+* Doctor Service: https://github.com/samroska/siads-699-team-18-service-2
 
 
 ## Local setup
@@ -46,3 +56,6 @@ The architecture of this project is a backend REST API service built with Python
     - `allow_origins=["https://capstoneteam18.netlify.com"]`
 
 Note: this service runs on posrt 8000. Unlike siads-699-team-18-service which runs on port 8080.
+
+### AI usage
+This application was built with help from Microsoft copilot 
