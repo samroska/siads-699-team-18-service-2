@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Dict, Union, Optional
 import os
+import io
 import zipfile
 import tempfile
 import shutil
@@ -168,21 +169,25 @@ class SkinLesionClassifier:
     
     @staticmethod
     def preprocess_image(image: Union[Image.Image, str]) -> np.ndarray:
-        try:
-            if isinstance(image, str):
-                image_rgb = Image.open(image).convert('RGB')
-            elif isinstance(image, Image.Image):
-                image_rgb = image.convert('RGB')
-            else:
-                raise ValueError("Image must be a PIL Image object or file path")
-            image_array = img_to_array(image_rgb)
-            resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
-            processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
-            # processed_array = processed_array / 255.0
-            return processed_array
-        except Exception as e:
-            logger.error(f"Error preprocessing image: {e}")
-            raise
+            try:
+                if isinstance(image, str):
+                    img = Image.open(image)
+                elif isinstance(image, Image.Image):
+                    img = image
+                else:
+                    raise ValueError("Image must be a PIL Image object or file path")
+                # Convert to JPEG format (in-memory)
+                jpeg_buffer = io.BytesIO()
+                img.save(jpeg_buffer, format='JPEG')
+                jpeg_buffer.seek(0)
+                img_jpeg = Image.open(jpeg_buffer)
+                image_array = img_to_array(img_jpeg)
+                resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
+                processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
+                return processed_array
+            except Exception as e:
+                logger.error(f"Error preprocessing image: {e}")
+                raise
             
     @staticmethod
     def predict(image: Union[Image.Image, str]) -> Dict[str, float]:
