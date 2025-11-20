@@ -64,30 +64,6 @@ class SkinLesionClassifier:
     MODEL_CONFIGS = {}  # Add this line to avoid attribute errors. Populate as needed.
     
     @staticmethod
-    def _extract_model_from_zip(zip_path: str) -> str:
-        """Extract model from BCN20000.keras.zip and return the .keras file path."""
-        global _temp_dirs
-        if not os.path.exists(zip_path):
-            raise FileNotFoundError(f"Model zip file not found: {zip_path}")
-        if 'default' not in _temp_dirs or not _temp_dirs['default']:
-            _temp_dirs['default'] = tempfile.mkdtemp(suffix='_model')
-        temp_dir = _temp_dirs['default']
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Find the first .keras file and stream-extract it to temp_dir
-            keras_member = None
-            for info in zip_ref.infolist():
-                if info.filename.endswith('.keras'):
-                    keras_member = info.filename
-                    break
-            if not keras_member:
-                raise FileNotFoundError("No .keras model file found in the zip archive")
-            model_path = os.path.join(temp_dir, os.path.basename(keras_member))
-            with zip_ref.open(keras_member) as src, open(model_path, 'wb') as dst:
-                shutil.copyfileobj(src, dst)
-            logger.info(f"Found and extracted model file: {model_path}")
-            return model_path
-    
-    @staticmethod
     def _ensure_model_loaded():
         """Ensure the model is loaded from BCN20000.keras.zip."""
         global _models, _models_loaded
@@ -176,12 +152,7 @@ class SkinLesionClassifier:
                     img = image
                 else:
                     raise ValueError("Image must be a PIL Image object or file path")
-                # Convert to JPEG format (in-memory)
-                jpeg_buffer = io.BytesIO()
-                img.save(jpeg_buffer, format='JPEG')
-                jpeg_buffer.seek(0)
-                img_jpeg = Image.open(jpeg_buffer)
-                image_array = img_to_array(img_jpeg)
+                image_array = img_to_array(img)
                 resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
                 processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
                 return processed_array
