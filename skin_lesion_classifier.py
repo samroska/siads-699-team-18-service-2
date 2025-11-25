@@ -1,10 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.applications.convnext import preprocess_input as convnext_preprocess
 from PIL import Image
 import numpy as np
 import logging
+import time
 from typing import Dict, Union, Optional
 import os
+import io
 import zipfile
 import tempfile
 import shutil
@@ -31,52 +34,45 @@ class SkinLesionClassifier:
         Otherwise, return the model_path as-is.
         """
         if model_path.endswith('.zip'):
+            # Extract only the .keras file from the zip (streamed) to avoid using large extra disk space
             global _temp_dirs
             if model_name not in _temp_dirs or not _temp_dirs[model_name]:
                 _temp_dirs[model_name] = tempfile.mkdtemp(suffix='_model')
+            temp_dir = _temp_dirs[model_name]
             with zipfile.ZipFile(model_path, 'r') as zip_ref:
-                zip_ref.extractall(_temp_dirs[model_name])
-            for root, dirs, files in os.walk(_temp_dirs[model_name]):
-                for file in files:
-                    if file.endswith('.keras'):
-                        return os.path.join(root, file)
-            raise FileNotFoundError(f"No .keras model file found in the zip archive for {model_name}")
+                # Find the first .keras entry in the archive
+                keras_member = None
+                for info in zip_ref.infolist():
+                    if info.filename.endswith('.keras'):
+                        keras_member = info.filename
+                        break
+                if not keras_member:
+                    raise FileNotFoundError(f"No .keras model file found in the zip archive for {model_name}")
+                target_path = os.path.join(temp_dir, os.path.basename(keras_member))
+                # Stream the file out to disk to avoid creating extra copies in memory
+                with zip_ref.open(keras_member) as src, open(target_path, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                logger.info(f"Extracted model file to: {target_path}")
+                return target_path
         else:
             return model_path
 
-    CLASS_NAMES = ['nevus',"melanoma","other","squamous cell carcinoma","solar lentigo","basal cell carcinoma", "melanoma metastasis" , "seborrheic keratosis", "actinic keratosis","dermatofibroma", "scar", "vascular lesion"]
-    INPUT_SIZE = (64, 64)
-    DEFAULT_MODEL_ZIP = 'BCN20000.keras.zip'
+    #CLASS_NAMES = ['nevus',"melanoma","other","squamous cell carcinoma","solar lentigo","basal cell carcinoma", "melanoma metastasis" , "seborrheic keratosis", "actinic keratosis","dermatofibroma", "scar", "vascular lesion"]
+    CLASS_NAMES = ['actinic keratosis', 'basal cell carcinoma', ' Benign Keratosis', 'dermatofibroma', 'melanoma', 'nevus', 'squamous cell carcinoma', 'vascular lesion']
+    INPUT_SIZE = (112, 112)
+    # Default model file (expect unzipped .keras file to be present at startup)
+    DEFAULT_MODEL_FILE = 'BCN20000.keras'
     MODEL_CONFIGS = {}  # Add this line to avoid attribute errors. Populate as needed.
     
-    @staticmethod
-    def _extract_model_from_zip(zip_path: str) -> str:
-        """Extract model from BCN20000.keras.zip and return the .keras file path."""
-        global _temp_dirs
-        if not os.path.exists(zip_path):
-            raise FileNotFoundError(f"Model zip file not found: {zip_path}")
-
-        if 'default' not in _temp_dirs or not _temp_dirs['default']:
-            _temp_dirs['default'] = tempfile.mkdtemp(suffix='_model')
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(_temp_dirs['default'])
-
-        for root, dirs, files in os.walk(_temp_dirs['default']):
-            for file in files:
-                if file.endswith('.keras'):
-                    model_path = os.path.join(root, file)
-                    logger.info(f"Found model file: {model_path}")
-                    return model_path
-        raise FileNotFoundError("No .keras model file found in the zip archive")
     @staticmethod
     def _ensure_model_loaded():
         """Ensure the model is loaded from BCN20000.keras.zip."""
         global _models, _models_loaded
+        # Legacy convenience loader: expect a .keras model file to be present (not a zip)
         if 'default' in _models_loaded and _models_loaded['default'] and _models.get('default') is not None:
             return
-        zip_path = SkinLesionClassifier.DEFAULT_MODEL_ZIP
+        model_path = SkinLesionClassifier.DEFAULT_MODEL_FILE
         try:
-            model_path = SkinLesionClassifier._extract_model_from_zip(zip_path)
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model file not found: {model_path}")
             _models['default'] = tf.keras.models.load_model(model_path)
@@ -91,27 +87,36 @@ class SkinLesionClassifier:
     def _ensure_model_loaded(model_name: str = 'default'):
         """Ensure the specified model is loaded."""
         global _models, _models_loaded
-        
         if model_name in _models_loaded and _models_loaded[model_name] and _models.get(model_name) is not None:
             return
         
         if model_name in SkinLesionClassifier.MODEL_CONFIGS:
             model_path = SkinLesionClassifier.MODEL_CONFIGS[model_name]
         elif model_name == 'default':
-            model_path = SkinLesionClassifier.DEFAULT_MODEL_ZIP
+            # Use the unzipped default .keras model file by default
+            model_path = SkinLesionClassifier.DEFAULT_MODEL_FILE
         else:
             model_path = model_name
         
         try:
+            # Time extraction and load separately to help diagnose slow steps
+            t0 = time.monotonic()
             actual_model_path = SkinLesionClassifier._extract_model_if_zipped(model_path, model_name)
-            
+            t1 = time.monotonic()
+
             if not os.path.exists(actual_model_path):
                 raise FileNotFoundError(f"Model file not found for {model_name}: {actual_model_path}")
-            
+
+            logger.info(f"Starting to load model '{model_name}' from {actual_model_path}")
+            load_start = time.monotonic()
             _models[model_name] = tf.keras.models.load_model(actual_model_path)
+            load_end = time.monotonic()
+
             _models_loaded[model_name] = True
-            logger.info(f"Model '{model_name}' loaded successfully from {actual_model_path}")
-            
+            logger.info(
+                f"Model '{model_name}' loaded successfully from {actual_model_path} (extraction_time={(t1-t0):.2f}s, load_time={(load_end-load_start):.2f}s)"
+            )
+
         except Exception as e:
             logger.error(f"Error loading {model_name} model: {e}")
             SkinLesionClassifier._cleanup_temp_files(model_name)
@@ -141,21 +146,21 @@ class SkinLesionClassifier:
     
     @staticmethod
     def preprocess_image(image: Union[Image.Image, str]) -> np.ndarray:
-        try:
-            if isinstance(image, str):
-                image_rgb = Image.open(image).convert('RGB')
-            elif isinstance(image, Image.Image):
-                image_rgb = image.convert('RGB')
-            else:
-                raise ValueError("Image must be a PIL Image object or file path")
-            image_array = img_to_array(image_rgb)
-            resized_image = tf.image.resize(image_array, SkinLesionClassifier.INPUT_SIZE)
-            processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
-            # processed_array = processed_array / 255.0
-            return processed_array
-        except Exception as e:
-            logger.error(f"Error preprocessing image: {e}")
-            raise
+            try:
+                if isinstance(image, str):
+                    img = Image.open(image)
+                elif isinstance(image, Image.Image):
+                    img = image
+                else:
+                    raise ValueError("Image must be a PIL Image object or file path")
+                img = img.convert('RGB')
+                resized_image = tf.image.resize(img, SkinLesionClassifier.INPUT_SIZE)
+                processed_array = img_to_array(resized_image).reshape(1, SkinLesionClassifier.INPUT_SIZE[0], SkinLesionClassifier.INPUT_SIZE[1], 3)
+                ce_image_array_normalized = convnext_preprocess(processed_array)
+                return ce_image_array_normalized
+            except Exception as e:
+                logger.error(f"Error preprocessing image: {e}")
+                raise
             
     @staticmethod
     def predict(image: Union[Image.Image, str]) -> Dict[str, float]:
@@ -163,11 +168,23 @@ class SkinLesionClassifier:
         Make prediction using the default model. Returns results sorted from largest to smallest.
         """
         try:
+            # Ensure the model is loaded (may be scheduled at startup via warmup)
+            t_start = time.monotonic()
             SkinLesionClassifier._ensure_model_loaded()
+            t_after_load = time.monotonic()
             if 'default' not in _models or _models['default'] is None:
                 raise RuntimeError("Model failed to load.")
+            preprocess_start = time.monotonic()
             processed_image = SkinLesionClassifier.preprocess_image(image)
+            preprocess_end = time.monotonic()
+
+            infer_start = time.monotonic()
             prediction = _models['default'].predict(processed_image, verbose=0)
+            infer_end = time.monotonic()
+
+            logger.info(
+                f"Timing (total={(time.monotonic()-t_start):.2f}s, load_wait={(t_after_load-t_start):.2f}s, preprocess={(preprocess_end-preprocess_start):.2f}s, inference={(infer_end-infer_start):.2f}s)"
+            )
             results = {}
             for i, class_name in enumerate(SkinLesionClassifier.CLASS_NAMES):
                 results[SkinLesionClassifier.capitalize_class_name(class_name)] = float(round(prediction[0][i], 3))
